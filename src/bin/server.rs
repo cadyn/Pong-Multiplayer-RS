@@ -38,8 +38,8 @@ struct Player {
 
 
 fn new_renet_server() -> RenetServer {
-    let server_addr = "127.0.0.1:5000".parse().unwrap();
-    let socket = UdpSocket::bind(server_addr).unwrap();
+    let server_addr = "45.33.33.109:5000".parse().unwrap();
+    let socket = UdpSocket::bind("0.0.0.0:5000").unwrap();
     let connection_config =  connection_config();
     let server_config = ServerConfig::new(64, PROTOCOL_ID, server_addr, ServerAuthentication::Unsecure);
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
