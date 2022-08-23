@@ -26,7 +26,7 @@ const PROTOCOL_ID: u64 = 7;
 use pong_multiplayer_rs::{common_net::*, common_game::*};
 
 fn new_renet_client() -> RenetClient {
-    let server_addr = "femboyfops:5000".parse().unwrap();
+    let server_addr = "45.33.33.109:5000".parse().unwrap();
     let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
     let connection_config = connection_config();
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
@@ -124,7 +124,8 @@ fn client_send_input(player_input: Res<PlayerInput>, mut client: ResMut<RenetCli
 /// If any error is found we just panic. This could definitely be improved for more robustness.
 fn panic_on_error_system(mut renet_error: EventReader<RenetError>) {
     for e in renet_error.iter() {
-        panic!("{:?}",e);
+        //panic!("{:?}",e);
+        println!("{:?}",e);
     }
 }
 
