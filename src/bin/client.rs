@@ -21,7 +21,7 @@ use bevy_renet::{
 use std::{time::SystemTime, net::{SocketAddr, TcpStream}, io::Write};
 use std::{net::UdpSocket};
 
-const PROTOCOL_ID: u64 = 7;
+//const PROTOCOL_ID: u64 = 7;
 
 use pong_multiplayer_rs::{common_net::*, common_game::*};
 

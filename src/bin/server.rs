@@ -80,7 +80,7 @@ fn handle_connection(mut stream: TcpStream, pkey: [u8;32]){
 }
 
 fn tcpserver(pkey: [u8;32]) {
-    let listener = TcpListener::bind("127.0.0.1:5000").unwrap();
+    let listener = TcpListener::bind("0.0.0.0:5000").unwrap();
     let pool = ThreadPool::new(4);
     for stream in listener.incoming() {
         match stream {
