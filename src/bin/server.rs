@@ -25,8 +25,8 @@ use bevy_renet::{
 use std::time::SystemTime;
 use std::{net::UdpSocket};
 
-use bevy_game_multiplayer::common_net::*;
-use bevy_game_multiplayer::common_game::*;
+use pong_multiplayer_rs::common_net::*;
+use pong_multiplayer_rs::common_game::*;
 
 const PROTOCOL_ID: u64 = 7;
 struct CheckResponses(Vec<u64>);

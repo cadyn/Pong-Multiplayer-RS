@@ -23,7 +23,7 @@ use std::{net::UdpSocket};
 
 const PROTOCOL_ID: u64 = 7;
 
-use bevy_game_multiplayer::{common_net::*, common_game::*};
+use pong_multiplayer_rs::{common_net::*, common_game::*};
 
 fn new_renet_client() -> RenetClient {
     let server_addr = "127.0.0.1:5000".parse().unwrap();
