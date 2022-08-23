@@ -40,7 +40,7 @@ fn new_renet_client(token: ConnectToken) -> RenetClient {
 
 fn main() {
     //Get our token first.
-    let sockaddr: SocketAddr = "127.0.0.1:5000".parse().unwrap();
+    let sockaddr: SocketAddr = "45.33.33.109:5000".parse().unwrap();
     let mut stream = TcpStream::connect(sockaddr).unwrap();
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
     let id = current_time.as_millis() as u64;

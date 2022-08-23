@@ -40,7 +40,7 @@ use pong_multiplayer_rs::common_net::*;
 use pong_multiplayer_rs::common_game::*;
 
 
-const PUB_IP: &str = "127.0.0.1:5000";
+const PUB_IP: &str = "45.33.33.109:5000";
 const PROTOCOL_ID: u64 = 7;
 struct CheckResponses(Vec<u64>);
 struct ReconnectTimer(Timer,bool);
@@ -51,7 +51,7 @@ struct Player {
 
 
 fn new_renet_server(pkey: [u8; 32]) -> RenetServer {
-    let server_addr = "127.0.0.1:5000".parse().unwrap();
+    let server_addr = PUB_IP.parse().unwrap();
     let socket = UdpSocket::bind("0.0.0.0:5000").unwrap();
     let connection_config =  connection_config();
     let server_config = ServerConfig::new(64, PROTOCOL_ID, server_addr, ServerAuthentication::Secure{ private_key:pkey});
