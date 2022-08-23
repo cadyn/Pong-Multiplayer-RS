@@ -2,6 +2,11 @@
 //! All of the code in this file is related to networking.
 //! For actual game code see common_game.rs
 
+use rand::{
+    thread_rng,
+    RngCore
+};
+
 use bevy::{
     prelude::*, 
     log::LogPlugin, 
@@ -17,17 +22,25 @@ use bevy_renet::{
         RenetServer, 
         ServerAuthentication, 
         ServerConfig, 
-        ServerEvent
+        ServerEvent, 
+        ConnectToken
     },
     RenetServerPlugin,
 };
 
-use std::time::SystemTime;
-use std::{net::UdpSocket};
+use threadpool::ThreadPool;
+
+use std::{time::{SystemTime, UNIX_EPOCH}, 
+    io::{BufReader, Read}, 
+    net::{UdpSocket,TcpListener,TcpStream,SocketAddr},
+    thread,
+};
 
 use pong_multiplayer_rs::common_net::*;
 use pong_multiplayer_rs::common_game::*;
 
+
+const PUB_IP: &str = "127.0.0.1:5000";
 const PROTOCOL_ID: u64 = 7;
 struct CheckResponses(Vec<u64>);
 struct ReconnectTimer(Timer,bool);
@@ -37,16 +50,60 @@ struct Player {
 }
 
 
-fn new_renet_server() -> RenetServer {
-    let server_addr = "45.33.33.109:5000".parse().unwrap();
+fn new_renet_server(pkey: [u8; 32]) -> RenetServer {
+    let server_addr = "127.0.0.1:5000".parse().unwrap();
     let socket = UdpSocket::bind("0.0.0.0:5000").unwrap();
     let connection_config =  connection_config();
-    let server_config = ServerConfig::new(64, PROTOCOL_ID, server_addr, ServerAuthentication::Unsecure);
+    let server_config = ServerConfig::new(64, PROTOCOL_ID, server_addr, ServerAuthentication::Secure{ private_key:pkey});
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
     RenetServer::new(current_time, server_config, connection_config, socket).unwrap()
 }
 
+fn handle_connection(mut stream: TcpStream, pkey: [u8;32]){
+    let mut reader = BufReader::new(&mut stream);
+    let mut bytes: [u8; 8] = [0u8; 8];
+    reader.read_exact(&mut bytes).unwrap();
+    let client_id = u64::from_be_bytes(bytes);
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+    let addr: SocketAddr = PUB_IP.parse().unwrap();
+    let token = ConnectToken::generate(
+        now,
+        PROTOCOL_ID,
+        120000,
+        client_id,
+        30,
+        vec![addr],
+        None,
+        &pkey
+    ).unwrap();
+    token.write(&mut stream).unwrap();
+}
+
+fn tcpserver(pkey: [u8;32]) {
+    let listener = TcpListener::bind("127.0.0.1:5000").unwrap();
+    let pool = ThreadPool::new(4);
+    for stream in listener.incoming() {
+        match stream {
+            Ok(s) => {
+                let key = pkey.clone();
+                pool.execute(move|| {
+                    handle_connection(s, key);
+                });
+            }
+            Err(e) => panic!("Encountered IO error: {e}")
+        }
+    }
+    pool.join();
+}
 fn main() {
+    let mut rng = thread_rng();
+    let mut pkey: [u8; 32] = [0u8;32];
+
+    rng.fill_bytes(&mut pkey);
+
+    let threadkey = pkey.clone();
+    thread::spawn(move ||tcpserver(threadkey));
+
     let mut app = App::new();
     // Since we're a headless server, we don't need a lot of the default plugins.
     // Instead, I picked out the ones we actually use.
@@ -64,7 +121,7 @@ fn main() {
     rtimer.pause();
     app.insert_resource(ReconnectTimer(rtimer,false));
     app.insert_resource(CheckResponses(Vec::new()));
-    app.insert_resource(new_renet_server());
+    app.insert_resource(new_renet_server(pkey.clone()));
     app.add_system(server_update_system);
     app.add_system(server_sync_players);
     app.add_system(move_players_system);
@@ -148,7 +205,8 @@ fn server_update_system(
                 ClientMessages::PlayerCheckResponse { id } => {
                     //They are responding to a player check. Add them to the list of players who responded.
                     responses.0.push(id);
-                }
+                },
+                _ => ()
             }
         }
     }

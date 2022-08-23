@@ -12,36 +12,45 @@ use bevy_renet::{
     renet::{
         ClientAuthentication, 
         RenetClient, 
-        RenetError, 
+        RenetError, ConnectToken, 
     },
     run_if_client_connected, 
     RenetClientPlugin,
 };
 
-use std::time::SystemTime;
+use std::{time::SystemTime, net::{SocketAddr, TcpStream}, io::Write};
 use std::{net::UdpSocket};
 
 const PROTOCOL_ID: u64 = 7;
 
 use pong_multiplayer_rs::{common_net::*, common_game::*};
 
-fn new_renet_client() -> RenetClient {
-    let server_addr = "45.33.33.109:5000".parse().unwrap();
+fn new_renet_client(token: ConnectToken) -> RenetClient {
+    //let server_addr = "45.33.33.109:5000".parse().unwrap();
     let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
     //socket.connect(server_addr).unwrap();
     let connection_config = connection_config();
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
     let client_id = current_time.as_millis() as u64;
-    let authentication = ClientAuthentication::Unsecure {
-        client_id,
-        protocol_id: PROTOCOL_ID,
-        server_addr,
-        user_data: None,
+    let authentication = ClientAuthentication::Secure {
+        connect_token: token
     };
     RenetClient::new(current_time, socket, client_id, connection_config, authentication).unwrap()
 }
 
 fn main() {
+    //Get our token first.
+    let sockaddr: SocketAddr = "127.0.0.1:5000".parse().unwrap();
+    let mut stream = TcpStream::connect(sockaddr).unwrap();
+    let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+    let id = current_time.as_millis() as u64;
+
+    //let auth_request = ClientMessages::AuthenticationRequest { id };
+    //let auth_request_bytes = bincode::serialize(&auth_request).unwrap();
+    let client_id_bytes: [u8; 8] = id.to_be_bytes();
+    stream.write(&client_id_bytes).unwrap();
+    let token = ConnectToken::read(&mut stream).unwrap();
+
     let mut app = App::new();
 
     // Let us handle the window close, allows us to clean up as needed before the app exits.
@@ -53,7 +62,7 @@ fn main() {
     app.add_plugins(DefaultPlugins);
 
     app.add_plugin(RenetClientPlugin);
-    app.insert_resource(new_renet_client());
+    app.insert_resource(new_renet_client(token));
     app.insert_resource(PlayerInput::default());
     app.insert_resource(SendTimer(Timer::from_seconds(POLL_RATE, true)));
     app.add_system(player_input);

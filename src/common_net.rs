@@ -92,6 +92,7 @@ pub enum ServerMessages {
 #[derive(Debug, Serialize, Deserialize, Component)]
 pub enum ClientMessages {
     PlayerCheckResponse { id: u64 },
+    AuthenticationRequest { id: u64 },
 }
 
 /// Contains a list of the players and their respective entity.
