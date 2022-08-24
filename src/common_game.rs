@@ -9,6 +9,7 @@ use bevy::{
     prelude::*,
     sprite::{collide_aabb::{collide, Collision}},
     time::FixedTimestep,
+    ecs::schedule::ShouldRun,
 };
 
 use crate::common_net::GameState;
@@ -52,9 +53,18 @@ const WALL_COLOR: Color = Color::rgb(0.8, 0.8, 0.8);
 const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
 const SCORE_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
 
+//Tells systems whether to run or not.
+pub fn is_game_active(playing: Res<Playing>) -> ShouldRun {
+    return match playing.0 {
+        false => ShouldRun::No,
+        true => ShouldRun::Yes,
+    }
+}
+
 /// Add game resources and systems to the client.
 pub fn add_to_app_client(mut app: App) -> App {
     app.insert_resource(Scoreboard { scoreleft: 0, scoreright: 0 })
+        .insert_resource(Playing(false))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(RespawnTimer(Timer::from_seconds(3.0,false)))
         .add_startup_system(setup_client)
@@ -62,6 +72,7 @@ pub fn add_to_app_client(mut app: App) -> App {
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+                .with_run_criteria(is_game_active)
                 .with_system(check_for_collisions)
                 .with_system(apply_velocity.before(check_for_collisions))
                 .with_system(play_collision_sound.after(check_for_collisions)),
@@ -73,19 +84,22 @@ pub fn add_to_app_client(mut app: App) -> App {
     return app;
 }
 
+
 /// Adds game resources and systems to the server, excluding the systems only the client needs.
 pub fn add_to_app_server(mut app: App) -> App {
     app.insert_resource(Scoreboard { scoreleft: 0, scoreright: 0 })
+        .insert_resource(Playing(false))
         .insert_resource(RespawnTimer(Timer::from_seconds(3.0,false)))
         .add_startup_system(setup_server)
         .add_event::<CollisionEvent>()
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
+                .with_run_criteria(is_game_active)
                 .with_system(check_for_collisions)
                 .with_system(apply_velocity.before(check_for_collisions))
-        )
-        .add_system(respawn_ball);
+                .with_system(respawn_ball).before(apply_velocity)
+        );
     return app;
 }
 
@@ -102,6 +116,9 @@ pub enum PlayerSide {
     Left,
     Right,
 }
+
+#[derive(Component)]
+pub struct Playing(pub bool);
 
 /// Ball component.
 #[derive(Component)]
@@ -254,7 +271,8 @@ pub struct Scoreboard {
 pub fn get_gamestate(
     ball: Query<(&Transform, &Velocity), With<Ball>>, 
     paddles: Query<(&Transform,&PaddleSide), With<Paddle>>, 
-    scoreboard: Res<Scoreboard>
+    scoreboard: Res<Scoreboard>,
+    playing: Res<Playing>
 ) -> GameState {
     let ball = ball.single();
     let mut paddle_l = Vec2::new(LEFT_WALL + GAP_BETWEEN_PADDLE_AND_WALL,0.0);
@@ -278,6 +296,7 @@ pub fn get_gamestate(
         paddle_r_loc: paddle_r,
         score_l: scoreboard.scoreleft as i32,
         score_r: scoreboard.scoreright as i32,
+        playing: playing.0,
     }
 }
 
@@ -287,6 +306,7 @@ pub fn set_gamestate(
     ball: &mut Query<(&mut Transform, &mut Velocity), (With<Ball>,Without<Paddle>)>,
     paddles: &mut Query<(&mut Transform,&PaddleSide), With<Paddle>>, 
     scoreboard: &mut ResMut<Scoreboard>,
+    playing: &mut ResMut<Playing>,
     gamestate: GameState) {
     let (mut ball_loc, mut ball_vel) = ball.single_mut();
     ball_loc.translation.x = gamestate.ball_loc.x;
@@ -307,6 +327,7 @@ pub fn set_gamestate(
     }
     scoreboard.scoreleft = gamestate.score_l as usize;
     scoreboard.scoreright = gamestate.score_r as usize;
+    playing.0 = gamestate.playing;
 }
 
 

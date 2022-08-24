@@ -18,7 +18,7 @@ use bevy_renet::{
     RenetClientPlugin,
 };
 
-use std::{time::{SystemTime,Duration}, net::{SocketAddr, TcpStream}, io::Write};
+use std::{time::{SystemTime}, net::{SocketAddr, TcpStream}, io::Write};
 use std::{net::UdpSocket};
 
 //const PROTOCOL_ID: u64 = 7;
@@ -82,6 +82,7 @@ fn client_sync_players(
     mut ball: Query<(&mut Transform, &mut Velocity), (With<Ball>,Without<Paddle>)>, 
     mut paddles: Query<(&mut Transform,&PaddleSide), With<Paddle>>, 
     mut scoreboard: ResMut<Scoreboard>,
+    mut playing: ResMut<Playing>,
 ) {
     // Recieving specific messages from the server.
     while let Some(message) = client.receive_message(0) {
@@ -108,7 +109,7 @@ fn client_sync_players(
     // and the logic to use that information is in common_game.rs
     while let Some(message) = client.receive_message(1) {
         let gamestate: GameState = bincode::deserialize(&message).unwrap();
-        set_gamestate(&mut ball,&mut paddles,&mut scoreboard,gamestate);
+        set_gamestate(&mut ball, &mut paddles, &mut scoreboard, &mut playing, gamestate);
     }
 }
 

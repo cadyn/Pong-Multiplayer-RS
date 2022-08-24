@@ -78,6 +78,7 @@ pub struct GameState{
     pub paddle_r_loc: Vec2,
     pub score_l: i32,
     pub score_r: i32,
+    pub playing: bool,
 }
 
 /// Possible messages the server could send to the player.

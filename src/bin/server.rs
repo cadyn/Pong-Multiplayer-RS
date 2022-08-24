@@ -141,6 +141,8 @@ fn server_update_system(
     mut lobby: ResMut<Lobby>,
     mut server: ResMut<RenetServer>,
     mut responses: ResMut<CheckResponses>,
+    mut playing: ResMut<Playing>,
+    mut scoreboard: ResMut<Scoreboard>,
     paddles: Query<Entity,(With<Paddle>,Without<Player>)>
 ) {
     for event in server_events.iter() {
@@ -170,6 +172,10 @@ fn server_update_system(
 
                 lobby.players.insert(*id, player_entity);
 
+                if lobby.players.keys().len() >= 2 {
+                    playing.0 = true;
+                }
+
                 // Forward the ClientConnected event to the rest of the players.
                 let message = bincode::serialize(&ServerMessages::PlayerConnected { id: *id }).unwrap();
                 server.broadcast_message(0, message);
@@ -180,6 +186,13 @@ fn server_update_system(
                 // If they're associated with an entity, remove that association. This frees up paddles for other players who connect.
                 if let Some(player_entity) = lobby.players.remove(id) {
                     commands.entity(player_entity).remove::<Player>().remove::<PlayerInput>();
+                }
+
+                //If this drops us below 2 players, then pause the game and reset the score
+                if lobby.players.keys().len() <= 2 {
+                    playing.0 = false;
+                    scoreboard.scoreleft = 0;
+                    scoreboard.scoreright = 0;
                 }
 
                 // Forward the ClientDisconnected event to the rest of the players.
@@ -219,11 +232,12 @@ fn server_sync_players(
     ball: Query<(&Transform, &Velocity), With<Ball>>, 
     paddles: Query<(&Transform,&PaddleSide), With<Paddle>>, 
     scoreboard: Res<Scoreboard>,
+    playing: Res<Playing>,
     time:Res<Time>, 
     mut timer: ResMut<SendTimer>,) {
     if timer.0.tick(time.delta()).just_finished() {
         //Just get gamestate, serialize it, send it.
-        let gamestate = get_gamestate(ball,paddles,scoreboard);
+        let gamestate = get_gamestate(ball,paddles,scoreboard,playing);
         let sync_message = bincode::serialize(&gamestate).unwrap();
         server.broadcast_message(1, sync_message);
     }
@@ -235,7 +249,7 @@ fn server_sync_players(
 /// But this should work fairly well in most situations.
 fn move_players_system(mut query: Query<(&mut Transform, &PlayerInput)>, time: Res<Time>) {
     for (mut transform, input) in query.iter_mut() {
-        let y = (input.down as i8 - input.up as i8) as f32;
+        let y = (input.up as i8 - input.down as i8) as f32;
         let bottom_bound = BOTTOM_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.y / 2.0 + PADDLE_PADDING;
         let top_bound = TOP_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.y / 2.0 - PADDLE_PADDING;
         let new_position = transform.translation.y + y * PADDLE_SPEED * time.delta().as_secs_f32();
