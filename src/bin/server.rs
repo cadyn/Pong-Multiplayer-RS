@@ -14,7 +14,6 @@ use bevy::{
     diagnostic::DiagnosticsPlugin, 
     time::TimePlugin,
     app::ScheduleRunnerPlugin,
-    ecs::schedule::ShouldRun,
 };
 
 use bevy_renet::{
@@ -53,13 +52,6 @@ struct Player {
 #[derive(Component)]
 struct ResetDue {
     is_reset_due: bool
-}
-
-fn needs_reset(resetter: Res<ResetDue>) -> ShouldRun {
-    match resetter.is_reset_due {
-        false => ShouldRun::No,
-        true => ShouldRun::Yes,
-    }
 }
 
 fn new_renet_server(pkey: [u8; 32]) -> RenetServer {
@@ -139,7 +131,7 @@ fn main() {
     app.add_system(server_sync_players);
     app.add_system(move_players_system);
     app.add_system(panic_on_error_system);
-    app.add_system(resetter.with_run_criteria(needs_reset));
+    app.add_system(resetter);
 
     // All of the actual game systems and resources are added in here. See common_game.rs
     app = add_to_app_server(app);
@@ -151,13 +143,17 @@ fn resetter(
     mut ball_query: Query<(&mut Velocity, &mut Transform),(With<Ball>,Without<Paddle>)>,
     mut timer: ResMut<RespawnTimer>,
     mut playing: ResMut<Playing>,
-    mut paddles: Query<&mut Transform,With<Paddle>>
+    mut paddles: Query<&mut Transform,With<Paddle>>,
+    resetter: Res<ResetDue>,
 ) {
+    if !resetter.is_reset_due {
+        return;
+    }
     //Reset the paddles
     for mut paddle in paddles.iter_mut(){
         paddle.translation.y = 0.0;
     }
-    
+
     //Reset the ball, and then trigger the respawn timer.
     let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
     ball_velocity.x = 0.0;
