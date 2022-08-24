@@ -144,11 +144,14 @@ fn resetter(
     mut timer: ResMut<RespawnTimer>,
     mut playing: ResMut<Playing>,
     mut paddles: Query<&mut Transform,With<Paddle>>,
-    resetter: Res<ResetDue>,
+    mut resetter: ResMut<ResetDue>,
 ) {
     if !resetter.is_reset_due {
         return;
     }
+    //Make sure system only fires this once
+    resetter.is_reset_due = false;
+
     //Reset the paddles
     for mut paddle in paddles.iter_mut(){
         paddle.translation.y = 0.0;
