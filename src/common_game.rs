@@ -98,7 +98,7 @@ pub fn add_to_app_server(mut app: App) -> App {
                 .with_run_criteria(is_game_active)
                 .with_system(check_for_collisions)
                 .with_system(apply_velocity.before(check_for_collisions))
-                .with_system(respawn_ball).before(apply_velocity)
+                .with_system(respawn_ball)
         );
     return app;
 }
