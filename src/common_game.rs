@@ -5,12 +5,14 @@ use num::signum;
 
 use rand::prelude::random;
 
+use std::time::Duration;
+
 use bevy::{
     prelude::*,
     sprite::{collide_aabb::{collide, Collision}},
-    time::FixedTimestep,
-    ecs::schedule::ShouldRun,
 };
+
+use iyes_loopless::prelude::*;
 
 use crate::common_net::GameState;
 
@@ -54,28 +56,28 @@ const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
 const SCORE_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
 
 //Tells systems whether to run or not.
-pub fn is_game_active(playing: Res<Playing>) -> ShouldRun {
-    return match playing.0 {
-        false => ShouldRun::No,
-        true => ShouldRun::Yes,
-    }
+pub fn is_game_active(playing: Res<Playing>) -> bool {
+    playing.0
 }
 
 /// Add game resources and systems to the client.
 pub fn add_to_app_client(mut app: App) -> App {
+    let fixed_update_stage = SystemStage::parallel()
+    .with_system(check_for_collisions.run_if(is_game_active).label("Collision check"))
+    .with_system(apply_velocity.run_if(is_game_active).before("Collision check"))
+    .with_system(play_collision_sound.run_if(is_game_active).after("Collision check"));
+    
+        
     app.insert_resource(Scoreboard { scoreleft: 0, scoreright: 0 })
         .insert_resource(Playing(false))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(RespawnTimer(Timer::from_seconds(3.0,false)))
         .add_startup_system(setup_client)
         .add_event::<CollisionEvent>()
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                .with_run_criteria(is_game_active)
-                .with_system(check_for_collisions)
-                .with_system(apply_velocity.before(check_for_collisions))
-                .with_system(play_collision_sound.after(check_for_collisions)),
+        .add_stage(
+            "fixed_update",
+            FixedTimestepStage::new(Duration::from_secs_f32(TIME_STEP))
+                .with_stage(fixed_update_stage)
         )
         .add_system(update_scoreboard)
         .add_system(bevy::window::close_on_esc);
@@ -87,17 +89,19 @@ pub fn add_to_app_client(mut app: App) -> App {
 
 /// Adds game resources and systems to the server, excluding the systems only the client needs.
 pub fn add_to_app_server(mut app: App) -> App {
+    let fixed_update_stage = SystemStage::parallel()
+    .with_system(check_for_collisions.run_if(is_game_active).label("Collision check"))
+    .with_system(apply_velocity.run_if(is_game_active).before("Collision check"));
+
     app.insert_resource(Scoreboard { scoreleft: 0, scoreright: 0 })
         .insert_resource(Playing(false))
         .insert_resource(RespawnTimer(Timer::from_seconds(3.0,false)))
         .add_startup_system(setup_server)
         .add_event::<CollisionEvent>()
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                .with_run_criteria(is_game_active)
-                .with_system(check_for_collisions)
-                .with_system(apply_velocity.before(check_for_collisions))
+        .add_stage(
+            "fixed_update",
+            FixedTimestepStage::new(Duration::from_secs_f32(TIME_STEP))
+                .with_stage(fixed_update_stage)
         )
         .add_system(respawn_ball);
     return app;
