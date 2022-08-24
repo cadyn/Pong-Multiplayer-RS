@@ -14,6 +14,7 @@ use bevy::{
     diagnostic::DiagnosticsPlugin, 
     time::TimePlugin,
     app::ScheduleRunnerPlugin,
+    ecs::schedule::ShouldRun,
 };
 
 use bevy_renet::{
@@ -49,6 +50,17 @@ struct ReconnectTimer(Timer,bool);
 struct Player {
 }
 
+#[derive(Component)]
+struct ResetDue {
+    is_reset_due: bool
+}
+
+fn needs_reset(resetter: Res<ResetDue>) -> ShouldRun {
+    match resetter.is_reset_due {
+        false => ShouldRun::No,
+        true => ShouldRun::Yes,
+    }
+}
 
 fn new_renet_server(pkey: [u8; 32]) -> RenetServer {
     let server_addr = PUB_IP.parse().unwrap();
@@ -115,6 +127,7 @@ fn main() {
         .add_plugin(DiagnosticsPlugin)
         .add_plugin(ScheduleRunnerPlugin);
     app.insert_resource(Lobby::default());
+    app.insert_resource(ResetDue{ is_reset_due: false});
     app.insert_resource(SendTimer(Timer::from_seconds(POLL_RATE, true)));
     app.add_plugin(RenetServerPlugin);
     let mut rtimer = Timer::from_seconds(3.0,false);
@@ -126,12 +139,36 @@ fn main() {
     app.add_system(server_sync_players);
     app.add_system(move_players_system);
     app.add_system(panic_on_error_system);
+    app.add_system(resetter.with_run_criteria(needs_reset));
 
     // All of the actual game systems and resources are added in here. See common_game.rs
     app = add_to_app_server(app);
     app.run();
 }
 
+
+fn resetter(
+    mut ball_query: Query<(&mut Velocity, &mut Transform),(With<Ball>,Without<Paddle>)>,
+    mut timer: ResMut<RespawnTimer>,
+    mut playing: ResMut<Playing>,
+    mut paddles: Query<&mut Transform,With<Paddle>>
+) {
+    //Reset the paddles
+    for mut paddle in paddles.iter_mut(){
+        paddle.translation.y = 0.0;
+    }
+    
+    //Reset the ball, and then trigger the respawn timer.
+    let (mut ball_velocity, mut ball_transform) = ball_query.single_mut();
+    ball_velocity.x = 0.0;
+    ball_velocity.y = 0.0;
+    ball_transform.translation.x = BALL_STARTING_POSITION.x;
+    ball_transform.translation.y = BALL_STARTING_POSITION.x;
+    timer.0.reset();
+
+    //Allow the game to start.
+    playing.0 = true;
+}
 
 /// Server update system recieves from all of the clients.
 /// Manages users connecting, disconnecting, input, etc.
@@ -143,7 +180,8 @@ fn server_update_system(
     mut responses: ResMut<CheckResponses>,
     mut playing: ResMut<Playing>,
     mut scoreboard: ResMut<Scoreboard>,
-    paddles: Query<Entity,(With<Paddle>,Without<Player>)>
+    paddles: Query<Entity,(With<Paddle>,Without<Player>)>,
+    mut resetter: ResMut<ResetDue>,
 ) {
     for event in server_events.iter() {
         match event {
@@ -173,7 +211,9 @@ fn server_update_system(
                 lobby.players.insert(*id, player_entity);
 
                 if lobby.players.keys().len() >= 2 {
-                    playing.0 = true;
+                    //Signals to the reset system to reset and begin the game.
+                    //Can't include it here because of the previous use of paddles, so we delegate it to a new system.
+                    resetter.is_reset_due = true;
                 }
 
                 // Forward the ClientConnected event to the rest of the players.
@@ -191,6 +231,9 @@ fn server_update_system(
                 //If this drops us below 2 players, then pause the game and reset the score
                 if lobby.players.keys().len() <= 2 {
                     playing.0 = false;
+
+                    
+
                     scoreboard.scoreleft = 0;
                     scoreboard.scoreright = 0;
                 }
