@@ -164,7 +164,7 @@ fn local_move(
     //Get transform of our paddle
     let mut iter = paddles.iter_mut();
     let mut transform = loop {
-        let (mut paddle, paddle_side) = iter.next().unwrap();
+        let (paddle, paddle_side) = iter.next().unwrap();
         if paddle_side.0 == side.0 {
             break paddle;
         }

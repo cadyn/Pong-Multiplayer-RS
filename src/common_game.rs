@@ -38,6 +38,9 @@ const INITIAL_BALL_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
 const BALL_SPEED_INCREASE: f32 = 1.1;
 const MAX_BALL_SPEED: f32 = 5000.0;
 
+const TRAIL_DECAY_MS: i32 = 500;
+const TRAIL_MAX_ALPHA: f32 = 0.5;
+
 pub const WALL_THICKNESS: f32 = 10.0;
 // x coordinates
 const LEFT_WALL: f32 = -450.;
@@ -81,6 +84,7 @@ pub fn add_to_app_client(mut app: App) -> App {
                 .with_stage(fixed_update_stage)
         )
         .add_system(update_scoreboard)
+        .add_system(handle_trails)
         .add_system(bevy::window::close_on_esc);
         //.add_system(respawn_ball); Removing respawn system from the client as it's inherently random and could lead to desync.
         // Let the server handle respawning and update the client.
@@ -145,6 +149,12 @@ pub struct Collider;
 
 #[derive(Default)]
 pub struct CollisionEvent;
+
+#[derive(Component)]
+pub struct Trail{
+    timeleft: i32,
+    startalpha: f32,
+}
 
 /// Keeps track of which side the wall is on for easy checking later.
 #[derive(Component)]
@@ -270,6 +280,49 @@ impl WallBundle {
 pub struct Scoreboard {
     pub scoreleft: usize,
     pub scoreright: usize,
+}
+
+/// Creates nice looking trails for the ball.
+fn handle_trails(
+    mut trails: Query<(Entity,&mut Trail, &mut Sprite)>,
+    ball: Query<(&Transform,&Velocity),With<Ball>>,
+    time: Res<Time>,
+    mut commands: Commands,
+) {
+    let ms_passed = time.delta().as_millis() as i32;
+    let (ball_transform, ball_velocity) = ball.single();
+
+    for (trail_ent, mut trail, mut trail_sprite) in trails.iter_mut(){
+        trail.timeleft -= ms_passed;
+        if trail.timeleft < 0{
+            commands.entity(trail_ent).despawn();
+            continue;
+        }
+        let alpha = trail.timeleft as f32 / (TRAIL_DECAY_MS as f32 / trail.startalpha);
+        trail_sprite.color = Color::rgba(BALL_COLOR.r(),BALL_COLOR.g(),BALL_COLOR.b(),alpha);
+    }
+
+    let ball_dist = ball_velocity.0.length() * time.delta().as_secs_f32();
+    let ball_lengths_passed = ball_dist / BALL_SIZE.x;
+    let starting_alpha = (ball_lengths_passed * TRAIL_MAX_ALPHA).clamp(0.0,TRAIL_MAX_ALPHA);
+
+    
+    let ball_pos = ball_transform.translation;
+
+    commands.spawn()
+        .insert(Trail{ timeleft: TRAIL_DECAY_MS, startalpha: starting_alpha })
+        .insert_bundle(SpriteBundle {
+            transform: Transform {
+                scale: BALL_SIZE,
+                translation: ball_pos,
+                ..default()
+            },
+            sprite: Sprite {
+                color: Color::rgba(BALL_COLOR.r(),BALL_COLOR.g(),BALL_COLOR.b(),TRAIL_MAX_ALPHA),
+                ..default()
+            },
+            ..default()
+        });
 }
 
 /// This takes information from all of the parts of the game that change over time and puts it into a struct
