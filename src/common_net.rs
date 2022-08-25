@@ -13,6 +13,8 @@ use bevy_renet::{
     },
 };
 
+use crate::common_game::*;
+
 /// Controls how often the server and client update each other.
 pub const POLL_RATE: f32 = 1.0 / 60.0;
 
@@ -60,7 +62,7 @@ pub fn connection_config() -> RenetConnectionConfig {
 pub struct SendTimer(pub Timer);
 
 /// Struct represents player inputs.
-#[derive(Debug, Default, Serialize, Deserialize, Component)]
+#[derive(Debug, Default, Serialize, Deserialize, Component, Clone, Copy)]
 pub struct PlayerInput {
     pub up: bool,
     pub down: bool,
@@ -85,6 +87,7 @@ pub struct GameState{
 #[derive(Debug, Serialize, Deserialize, Component)]
 pub enum ServerMessages {
     PlayerConnected { id: u64 },
+    PlayerIsSide { side: PlayerSide},
     PlayerDisconnected { id: u64 },
     PlayerCheck,
 }

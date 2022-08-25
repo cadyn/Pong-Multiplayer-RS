@@ -18,6 +18,12 @@ use bevy_renet::{
     RenetClientPlugin,
 };
 
+#[derive(Component)]
+struct ClientSide(PlayerSide);
+
+#[derive(Component)]
+struct ServInput(PlayerInput);
+
 use std::{time::{SystemTime}, net::{SocketAddr, TcpStream}, io::Write};
 use std::{net::UdpSocket};
 
@@ -58,17 +64,20 @@ fn main() {
         close_when_requested:false,
         ..default()
     });
+    app.insert_resource(ClientSide(PlayerSide::Left));
 
     app.add_plugins(DefaultPlugins);
 
     app.add_plugin(RenetClientPlugin);
     app.insert_resource(new_renet_client(token));
     app.insert_resource(PlayerInput::default());
+    app.insert_resource(ServInput(PlayerInput::default()));
     app.insert_resource(SendTimer(Timer::from_seconds(POLL_RATE, true)));
     app.add_system(player_input);
     app.add_system(client_send_input.with_run_criteria(run_if_client_connected));
     app.add_system(client_sync_players.with_run_criteria(run_if_client_connected));
     app.add_system(on_exit);
+    app.add_system(local_move);
 
     // Gets game systems and resources from common_game.rs
     app = add_to_app_client(app);
@@ -83,6 +92,7 @@ fn client_sync_players(
     mut paddles: Query<(&mut Transform,&PaddleSide), With<Paddle>>, 
     mut scoreboard: ResMut<Scoreboard>,
     mut playing: ResMut<Playing>,
+    mut cside: ResMut<ClientSide>,
 ) {
     // Recieving specific messages from the server.
     while let Some(message) = client.receive_message(0) {
@@ -100,6 +110,9 @@ fn client_sync_players(
                 // Server wants to check that we are still here. Send an appropriate response.
                 let message = bincode::serialize(&ClientMessages::PlayerCheckResponse { id: client.client_id() }).unwrap();
                 client.send_message(2, message);
+            },
+            ServerMessages::PlayerIsSide { side } => {
+                cside.0 = side;
             },
         }
     }
@@ -124,12 +137,43 @@ fn player_input(keyboard_input: Res<Input<KeyCode>>, mut player_input: ResMut<Pl
 /// We send our input and the server moves us. 
 /// Makes things easier since the client does not need to keep track of which paddle it represents.
 /// Has potential for issues if packet loss is high.
-fn client_send_input(player_input: Res<PlayerInput>, mut client: ResMut<RenetClient>, time:Res<Time>, mut timer: ResMut<SendTimer>) {
+fn client_send_input(
+    player_input: Res<PlayerInput>, 
+    mut client: ResMut<RenetClient>,
+    mut serv_input: ResMut<ServInput>,
+    time:Res<Time>, 
+    mut timer: ResMut<SendTimer>,
+) {
     if timer.0.tick(time.delta()).just_finished() {
         let input_message = bincode::serialize(&*player_input).unwrap();
 
         client.send_message(0, input_message);
+        serv_input.0 = *player_input;
     }
+}
+
+fn local_move(
+    serv_input: Res<ServInput>,
+    side: Res<ClientSide>,
+    mut paddles: Query<(&mut Transform,&PaddleSide), With<Paddle>>,
+    time:Res<Time>,
+) {
+    //Input mimics what the server would see, only updating when we send packets.
+    let input = &serv_input.0;
+
+    //Get transform of our paddle
+    let mut iter = paddles.iter_mut();
+    let mut transform = loop {
+        let (mut paddle, paddle_side) = iter.next().unwrap();
+        if paddle_side.0 == side.0 {
+            break paddle;
+        }
+    };
+    let y = (input.up as i8 - input.down as i8) as f32;
+    let bottom_bound = BOTTOM_WALL + WALL_THICKNESS / 2.0 + PADDLE_SIZE.y / 2.0 + PADDLE_PADDING;
+    let top_bound = TOP_WALL - WALL_THICKNESS / 2.0 - PADDLE_SIZE.y / 2.0 - PADDLE_PADDING;
+    let new_position = transform.translation.y + y * PADDLE_SPEED * time.delta().as_secs_f32();
+    transform.translation.y = new_position.clamp(bottom_bound,top_bound);
 }
 
 /// If any error is found we just panic. This could definitely be improved for more robustness.

@@ -179,7 +179,7 @@ fn server_update_system(
     mut responses: ResMut<CheckResponses>,
     mut playing: ResMut<Playing>,
     mut scoreboard: ResMut<Scoreboard>,
-    paddles: Query<Entity,(With<Paddle>,Without<Player>)>,
+    paddles: Query<(Entity,&PaddleSide),(With<Paddle>,Without<Player>)>,
     mut resetter: ResMut<ResetDue>,
 ) {
     for event in server_events.iter() {
@@ -189,7 +189,7 @@ fn server_update_system(
 
                 // If there are any paddles without players attached to them already,
                 // then attach this new player to the first one we recieve in our query.
-                let player_entity = match paddles.iter().next() {
+                let (player_entity, pside) = match paddles.iter().next() {
                     Some(p) => p,
                     None => {
                         //Otherwise, just disconnect them.
@@ -206,6 +206,10 @@ fn server_update_system(
                     let message = bincode::serialize(&ServerMessages::PlayerConnected { id: player_id }).unwrap();
                     server.send_message(*id, 0, message);
                 }
+
+                //Also, let them know which side they're on.
+                let message = bincode::serialize(&ServerMessages::PlayerIsSide{ side: pside.0}).unwrap();
+                server.send_message(*id, 0, message);
 
                 lobby.players.insert(*id, player_entity);
 
@@ -258,8 +262,10 @@ fn server_update_system(
             let recieved: ClientMessages = bincode::deserialize(&message).unwrap();
             match recieved {
                 ClientMessages::PlayerCheckResponse { id } => {
-                    //They are responding to a player check. Add them to the list of players who responded.
-                    responses.0.push(id);
+                    //They are responding to a player check. Add them to the list of players who responded if their id checks out.
+                    if id == client_id {
+                        responses.0.push(id);
+                    }
                 },
                 _ => ()
             }
@@ -313,8 +319,7 @@ fn panic_on_error_system(mut renet_error: EventReader<RenetError>,mut server: Re
             println!("Network Error encountered, attempted to purge nonpresent players.");
             let message = bincode::serialize(&ServerMessages::PlayerCheck).unwrap();
             // Send players a packet which requests they send a response with their id to verify they are there.
-            // This can be impersonated, but we're not using signed messages, so all of the messages can be.
-            // This is not a secure implementation to begin with.
+            // No longer able to be impersonated thanks to cryptographic signing of messages. Verify their ID before accepting it.
             server.broadcast_message(0, message);
 
             timer.0.unpause();

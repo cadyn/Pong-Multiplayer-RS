@@ -4,6 +4,7 @@
 use num::signum;
 
 use rand::prelude::random;
+use serde::{Deserialize,Serialize};
 
 use std::time::Duration;
 
@@ -113,9 +114,10 @@ pub struct Paddle;
 
 /// This tells us which side the paddle is supposed to represent.
 #[derive(Component)]
-pub struct PaddleSide(PlayerSide);
+pub struct PaddleSide(pub PlayerSide);
 
 /// Either left or right, used in the PaddleSide tuple struct
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerSide {
     Left,
     Right,
