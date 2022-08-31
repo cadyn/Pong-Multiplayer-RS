@@ -311,6 +311,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_crt"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da31a55a30dac866b420f385be475afd687f0e581783e837cd68e6daebc03745"
+dependencies = [
+ "bevy",
+]
+
+[[package]]
 name = "bevy_derive"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2543,9 +2552,10 @@ dependencies = [
 
 [[package]]
 name = "pong_multiplayer_rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bevy",
+ "bevy_crt",
  "bevy_internal",
  "bevy_renet",
  "bincode",

@@ -10,10 +10,12 @@ use std::time::Duration;
 
 use bevy::{
     prelude::*,
-    sprite::{collide_aabb::{collide, Collision}},
+    sprite::{collide_aabb::{collide, Collision}}, render::view::RenderLayers,
 };
 
 use iyes_loopless::prelude::*;
+
+use bevy_crt::plugin::Crt2dPlugin;
 
 use crate::common_net::GameState;
 
@@ -52,8 +54,8 @@ pub const TOP_WALL: f32 = 300.;
 const SCOREBOARD_FONT_SIZE: f32 = 40.0;
 const SCOREBOARD_TEXT_PADDING: Val = Val::Px(5.0);
 
-const BACKGROUND_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
-const PADDLE_COLOR: Color = Color::rgb(0.3, 0.3, 0.7);
+const BACKGROUND_COLOR: Color = Color::rgb(0.02, 0.02, 0.02);
+const PADDLE_COLOR: Color = Color::rgb(0.5, 0.5, 0.95);
 const BALL_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
 const WALL_COLOR: Color = Color::rgb(0.8, 0.8, 0.8);
 const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
@@ -72,11 +74,12 @@ pub fn add_to_app_client(mut app: App) -> App {
     .with_system(play_collision_sound.run_if(is_game_active).after("Collision check"));
     
         
-    app.insert_resource(Scoreboard { scoreleft: 0, scoreright: 0 })
+    app.add_plugin(Crt2dPlugin)
+        .insert_resource(Scoreboard { scoreleft: 0, scoreright: 0 })
         .insert_resource(Playing(false))
         .insert_resource(ClearColor(BACKGROUND_COLOR))
         .insert_resource(RespawnTimer(Timer::from_seconds(3.0,false)))
-        .add_startup_system(setup_client)
+        .add_startup_system(setup_client.after(bevy_crt::plugin::setup_post_2d))
         .add_event::<CollisionEvent>()
         .add_stage(
             "fixed_update",
@@ -394,7 +397,8 @@ pub fn set_gamestate(
 /// Specific to the client as it uses sprites and assets.
 fn setup_client(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Camera
-    commands.spawn_bundle(Camera2dBundle::default());
+    // Camera is spawned by Crt2dPlugin now
+    //commands.spawn_bundle(Camera2dBundle::default());
 
     // Sound
     let ball_collision_sound = asset_server.load("sounds/breakout_collision.ogg");
@@ -500,7 +504,7 @@ fn setup_client(mut commands: Commands, asset_server: Res<AssetServer>) {
             },
             ..default()
         }),
-    );
+    ).insert(RenderLayers::layer(0u8));
 
     // Walls
     commands.spawn_bundle(WallBundle::new(WallLocation::Left)).insert(Wall);
