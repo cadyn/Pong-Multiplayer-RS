@@ -52,7 +52,8 @@ pub const BOTTOM_WALL: f32 = -300.;
 pub const TOP_WALL: f32 = 300.;
 
 const SCOREBOARD_FONT_SIZE: f32 = 40.0;
-const SCOREBOARD_TEXT_PADDING: Val = Val::Px(5.0);
+const SCOREBOARD_TEXT_PADDING: Val = Val::Percent(5.0);
+const SCOREBOARD_TEXT_PADDING_RIGHT: Val = Val::Percent(95.0);
 
 const BACKGROUND_COLOR: Color = Color::rgb(0.02, 0.02, 0.02);
 const PADDLE_COLOR: Color = Color::rgb(0.5, 0.5, 0.95);
@@ -60,6 +61,8 @@ const BALL_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
 const WALL_COLOR: Color = Color::rgb(0.8, 0.8, 0.8);
 const TEXT_COLOR: Color = Color::rgb(0.5, 0.5, 1.0);
 const SCORE_COLOR: Color = Color::rgb(1.0, 0.5, 0.5);
+
+const FIXED_RES: Vec2 = Vec2::new(1280.0, 720.0);
 
 //Tells systems whether to run or not.
 pub fn is_game_active(playing: Res<Playing>) -> bool {
@@ -113,6 +116,15 @@ pub fn add_to_app_server(mut app: App) -> App {
         )
         .add_system(respawn_ball);
     return app;
+}
+
+#[derive(Component)]
+pub struct ScoreSide (pub ScoringSide);
+
+#[derive(PartialEq, Eq)]
+pub enum ScoringSide {
+    Left,
+    Right,
 }
 
 /// This just tells us which entities are paddles.
@@ -481,6 +493,20 @@ fn setup_client(mut commands: Commands, asset_server: Res<AssetServer>) {
                 font_size: SCOREBOARD_FONT_SIZE,
                 color: SCORE_COLOR,
             }),
+        ])
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                top: SCOREBOARD_TEXT_PADDING,
+                left: SCOREBOARD_TEXT_PADDING,
+                ..default()
+            },
+            ..default()
+        }),
+    ).insert(ScoreSide(ScoringSide::Left));
+
+    commands.spawn_bundle(
+        TextBundle::from_sections([
             TextSection::new(
                 "Score p2: ",
                 TextStyle {
@@ -499,12 +525,12 @@ fn setup_client(mut commands: Commands, asset_server: Res<AssetServer>) {
             position_type: PositionType::Absolute,
             position: UiRect {
                 top: SCOREBOARD_TEXT_PADDING,
-                left: SCOREBOARD_TEXT_PADDING,
+                right: SCOREBOARD_TEXT_PADDING_RIGHT,
                 ..default()
             },
             ..default()
         }),
-    ).insert(RenderLayers::layer(0u8));
+    ).insert(ScoreSide(ScoringSide::Right));
 
     // Walls
     commands.spawn_bundle(WallBundle::new(WallLocation::Left)).insert(Wall);
@@ -629,10 +655,16 @@ fn apply_velocity(
     }
 }
 
-fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<&mut Text>) {
-    if let Some(mut text) = query.iter_mut().next(){
-        text.sections[1].value = scoreboard.scoreleft.to_string();
-        text.sections[3].value = scoreboard.scoreright.to_string();
+fn update_scoreboard(scoreboard: Res<Scoreboard>, mut query: Query<(&mut Text, &ScoreSide)>) {
+    for (mut text, score_side) in query.iter_mut(){
+        match score_side.0 {
+            ScoringSide::Left => {
+                text.sections[1].value = scoreboard.scoreleft.to_string();
+            },
+            ScoringSide::Right => {
+                text.sections[1].value = scoreboard.scoreright.to_string();
+            }
+        }
     }
 }
 

@@ -34,6 +34,7 @@ use std::{time::{SystemTime, UNIX_EPOCH},
     io::{BufReader, Read}, 
     net::{UdpSocket,TcpListener,TcpStream,SocketAddr},
     thread,
+    sync::mpsc::channel,
 };
 
 use pong_multiplayer_rs::common_net::*;
@@ -64,23 +65,36 @@ fn new_renet_server(pkey: [u8; 32]) -> RenetServer {
 }
 
 fn handle_connection(mut stream: TcpStream, pkey: [u8;32]){
-    let mut reader = BufReader::new(&mut stream);
-    let mut bytes: [u8; 8] = [0u8; 8];
-    reader.read_exact(&mut bytes).unwrap();
-    let client_id = u64::from_be_bytes(bytes);
-    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-    let addr: SocketAddr = PUB_IP.parse().unwrap();
-    let token = ConnectToken::generate(
-        now,
-        PROTOCOL_ID,
-        120000,
-        client_id,
-        30,
-        vec![addr],
-        None,
-        &pkey
-    ).unwrap();
-    token.write(&mut stream).unwrap();
+    //let mut reader = BufReader::new(&mut stream);
+    //let mut bytes: [u8; 8] = [0u8; 8];
+    //reader.read_exact(&mut bytes).unwrap();
+    //let client_id = u64::from_be_bytes(bytes);
+    let message: ClientMessagesTcp = bincode::deserialize_from(&stream).unwrap();
+    match message {
+        ClientMessagesTcp::AuthenticationRequest { id, username} => {
+            //We need to convert the username into a fixed byte array of length 256.
+            let mut i = 0;
+            let username_bytes = username.as_bytes();
+            let mut data = [0u8;256];
+            for byte in username_bytes {
+                data[i] = *byte;
+                i += 1;
+            }
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+            let addr: SocketAddr = PUB_IP.parse().unwrap();
+            let token = ConnectToken::generate(
+                now,
+                PROTOCOL_ID,
+                120000,
+                id,
+                30,
+                vec![addr],
+                Some(&data),
+                &pkey
+            ).unwrap();
+            token.write(&mut stream).unwrap();
+        }
+    }
 }
 
 fn tcpserver(pkey: [u8;32]) {

@@ -53,8 +53,10 @@ fn main() {
 
     //let auth_request = ClientMessages::AuthenticationRequest { id };
     //let auth_request_bytes = bincode::serialize(&auth_request).unwrap();
-    let client_id_bytes: [u8; 8] = id.to_be_bytes();
-    stream.write(&client_id_bytes).unwrap();
+    //let client_id_bytes: [u8; 8] = id.to_be_bytes();
+    //stream.write(&client_id_bytes).unwrap();
+    let message = ClientMessagesTcp::AuthenticationRequest { id, username: format!("TestUsername") };
+    bincode::serialize_into(&mut stream, &message).unwrap();
     let token = ConnectToken::read(&mut stream).unwrap();
 
     let mut app = App::new();
